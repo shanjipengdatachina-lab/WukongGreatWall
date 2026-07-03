@@ -1,24 +1,25 @@
 import request from './index'
-import type { Student, PaginationParams, PaginatedResponse } from '@/types'
 
-export function getStudents(params: PaginationParams & Record<string, any>) {
-  return request.get<PaginatedResponse<Student>>('/students', { params })
+export function getStudents(params: Record<string, any>) {
+  return request.get<any>('/users', { params })
 }
 
 export function getStudent(id: number) {
-  return request.get<Student>(`/students/${id}`)
+  return request.get<any>(`/users/${id}`)
 }
 
-export function createStudent(data: Partial<Student>) {
-  return request.post<Student>('/students', data)
+export function createStudent(data: any) {
+  return request.post<any>('/users', data)
 }
 
-export function updateStudent(id: number, data: Partial<Student>) {
-  return request.put<Student>(`/students/${id}`, data)
+export function updateStudent(id: number, data: any) {
+  return request.put<any>(`/users/${id}`, data)
 }
 
-export function importStudents(file: File) {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post('/students/import', formData)
+export function disableStudent(id: number) {
+  return request.put<any>(`/users/${id}`, { status: 'inactive' })
+}
+
+export function resetPassword(id: number, password?: string) {
+  return request.post<any>(`/users/${id}/reset-password`, { password })
 }

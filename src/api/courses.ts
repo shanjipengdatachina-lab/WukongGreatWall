@@ -21,16 +21,16 @@ export function deleteCourse(id: number) {
   return request.delete(`/courses/${id}`)
 }
 
-export function createChapter(data: Partial<Chapter>) {
-  return request.post<Chapter>('/chapters', data)
+export function createChapter(courseId: number, data: Partial<Chapter>) {
+  return request.post<Chapter>(`/courses/${courseId}/chapters`, data)
 }
 
-export function updateChapter(id: number, data: Partial<Chapter>) {
-  return request.put<Chapter>(`/chapters/${id}`, data)
+export function updateChapter(chapterId: number, data: Partial<Chapter>) {
+  return request.put<Chapter>(`/courses/0/chapters/${chapterId}`, data)
 }
 
-export function deleteChapter(id: number) {
-  return request.delete(`/chapters/${id}`)
+export function deleteChapter(chapterId: number) {
+  return request.delete(`/courses/0/chapters/${chapterId}`)
 }
 
 export function getResources(params: PaginationParams & Record<string, any>) {

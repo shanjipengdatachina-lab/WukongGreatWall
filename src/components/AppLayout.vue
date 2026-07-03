@@ -18,7 +18,7 @@
           <template #icon><t-icon name="dashboard" /></template>
           工作台
         </t-menu-item>
-        <t-menu-item value="students">
+        <t-menu-item v-if="isAdmin" value="students">
           <template #icon><t-icon name="usergroup" /></template>
           学员管理
         </t-menu-item>
@@ -30,7 +30,7 @@
           <template #icon><t-icon name="assignment" /></template>
           作业管理
         </t-menu-item>
-        <t-menu-item value="reviews">
+        <t-menu-item v-if="isAdmin" value="reviews">
           <template #icon><t-icon name="check-rectangle" /></template>
           评审管理
         </t-menu-item>
@@ -55,11 +55,11 @@
           <template #icon><t-icon name="folder-open" /></template>
           资源中心
         </t-menu-item>
-        <t-menu-item value="invitations">
+        <t-menu-item v-if="isAdmin" value="invitations">
           <template #icon><t-icon name="calendar" /></template>
           培训邀约
         </t-menu-item>
-        <t-menu-item value="analytics">
+        <t-menu-item v-if="isAdmin" value="analytics">
           <template #icon><t-icon name="chart" /></template>
           数据统计
         </t-menu-item>
@@ -67,7 +67,7 @@
           <template #icon><t-icon name="notification" /></template>
           消息中心
         </t-menu-item>
-        <t-submenu value="settings" title="系统设置">
+        <t-submenu v-if="isAdmin" value="settings" title="系统设置">
           <template #icon><t-icon name="setting" /></template>
           <t-menu-item value="settings/roles">角色权限</t-menu-item>
           <t-menu-item value="settings/dictionaries">基础字典</t-menu-item>
@@ -124,6 +124,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const userName = computed(() => authStore.userName)
+const isAdmin = computed(() => authStore.userRole === 'admin')
 
 const expandedKeys = ref<string[]>(['topics', 'outcomes', 'collaboration', 'settings'])
 

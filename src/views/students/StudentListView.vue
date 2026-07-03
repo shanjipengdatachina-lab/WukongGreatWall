@@ -17,29 +17,12 @@
             :options="universityOptions"
           />
         </t-form-item>
-        <t-form-item label="研究方向" name="researchDirection">
+        <t-form-item label="状态" name="status">
           <t-select
-            v-model="filters.researchDirection"
-            placeholder="请选择研究方向"
+            v-model="filters.status"
+            placeholder="请选择状态"
             clearable
-            filterable
-            :options="researchDirectionOptions"
-          />
-        </t-form-item>
-        <t-form-item label="角色" name="roleType">
-          <t-select
-            v-model="filters.roleType"
-            placeholder="请选择角色"
-            clearable
-            :options="roleOptions"
-          />
-        </t-form-item>
-        <t-form-item label="权限可见性" name="visibility">
-          <t-select
-            v-model="filters.visibility"
-            placeholder="请选择"
-            clearable
-            :options="visibilityOptions"
+            :options="statusOptions"
           />
         </t-form-item>
         <t-form-item>
@@ -76,38 +59,21 @@
           :stripe="true"
           table-layout="auto"
         >
+          <template #avatar="{ row }">
+            <t-avatar v-if="getAvatarUrl(row)" :image="getAvatarUrl(row)" size="36px" />
+            <t-avatar v-else size="36px">{{ getDisplayName(row)?.charAt(0) }}</t-avatar>
+          </template>
+          <template #realName="{ row }">
+            <span class="student-name">{{ getDisplayName(row) }}</span>
+          </template>
           <template #roleType="{ row }">
-            <t-tag
-              :theme="getRoleTheme(row.roleType)"
-              variant="light"
-              size="small"
-            >
-              {{ row.roleType }}
+            <t-tag :theme="getRoleTheme(row.role)" variant="light" size="small">
+              {{ roleLabelMap[row.role] || row.role }}
             </t-tag>
           </template>
-          <template #courseProgress="{ row }">
-            <t-progress
-              :percentage="row.courseProgress"
-              :label="`${row.courseProgress}%`"
-              size="small"
-            />
-          </template>
-          <template #visibility="{ row }">
-            <t-tag
-              :theme="row.visibility === 'visible' ? 'success' : 'default'"
-              variant="light"
-              size="small"
-            >
-              {{ row.visibility === 'visible' ? '可见' : '隐藏' }}
-            </t-tag>
-          </template>
-          <template #reviewerAuthorized="{ row }">
-            <t-tag
-              :theme="getReviewerTheme(row)"
-              variant="light"
-              size="small"
-            >
-              {{ getReviewerLabel(row) }}
+          <template #status="{ row }">
+            <t-tag :theme="row.status === 'active' ? 'success' : 'default'" variant="light" size="small">
+              {{ row.status === 'active' ? '正常' : '已禁用' }}
             </t-tag>
           </template>
           <template #operation="{ row }">
@@ -118,12 +84,18 @@
               <t-button variant="text" theme="primary" size="small" @click="handleEdit(row)">
                 编辑
               </t-button>
-              <t-button variant="text" theme="warning" size="small" @click="handleAuthorize(row)">
-                授权
-              </t-button>
+              <t-popconfirm
+                content="确定要重置该学员的密码为默认密码吗？"
+                theme="warning"
+                @confirm="handleResetPassword(row)"
+              >
+                <t-button variant="text" theme="warning" size="small">
+                  重置密码
+                </t-button>
+              </t-popconfirm>
               <t-popconfirm
                 content="确定要禁用该学员吗？"
-                theme="warning"
+                theme="danger"
                 @confirm="handleDisable(row)"
               >
                 <t-button variant="text" theme="danger" size="small">
@@ -156,13 +128,14 @@
       size="480px"
       :footer="false"
     >
-      <div v-if="detailStudent" class="detail-content">
+      <div v-if="detailData" class="detail-content">
         <div class="detail-avatar-row">
-          <t-avatar size="80px">{{ detailStudent.name?.charAt(0) }}</t-avatar>
+          <t-avatar v-if="getAvatarUrl(detailData)" :image="getAvatarUrl(detailData)" size="80px" />
+          <t-avatar v-else size="80px">{{ getDisplayName(detailData)?.charAt(0) }}</t-avatar>
           <div class="detail-avatar-info">
-            <h3>{{ detailStudent.name }}</h3>
-            <t-tag :theme="getRoleTheme(detailStudent.roleType)" variant="light" size="small">
-              {{ detailStudent.roleType }}
+            <h3>{{ getDisplayName(detailData) }}</h3>
+            <t-tag :theme="getRoleTheme(detailData.role)" variant="light" size="small">
+              {{ roleLabelMap[detailData.role] || detailData.role }}
             </t-tag>
           </div>
         </div>
@@ -170,78 +143,55 @@
         <div class="detail-grid">
           <div class="detail-item">
             <span class="detail-label">Scholar ID</span>
-            <span class="detail-value">{{ detailStudent.scholarId }}</span>
+            <span class="detail-value">{{ detailData.scholar_id || '-' }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">性别</span>
-            <span class="detail-value">{{ detailStudent.gender }}</span>
+            <span class="detail-label">学号</span>
+            <span class="detail-value">{{ detailData.profile?.student_id || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">院校</span>
-            <span class="detail-value">{{ detailStudent.university }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">专业</span>
-            <span class="detail-value">{{ detailStudent.major }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">年级</span>
-            <span class="detail-value">{{ detailStudent.grade }}</span>
+            <span class="detail-value">{{ detailData.profile?.institution?.name || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">研究方向</span>
-            <span class="detail-value">{{ detailStudent.researchDirection }}</span>
+            <span class="detail-value">{{ detailData.profile?.research_direction || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">手机号</span>
-            <span class="detail-value">{{ detailStudent.phone }}</span>
+            <span class="detail-value">{{ detailData.profile?.phone || '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">邮箱</span>
-            <span class="detail-value">{{ detailStudent.email }}</span>
+            <span class="detail-value">{{ detailData.email || '-' }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">入学日期</span>
-            <span class="detail-value">{{ detailStudent.enrollmentDate }}</span>
+            <span class="detail-label">用户名</span>
+            <span class="detail-value">{{ detailData.username || '-' }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">角色</span>
+            <span class="detail-value">
+              <t-tag :theme="getRoleTheme(detailData.role)" variant="light" size="small">
+                {{ roleLabelMap[detailData.role] || detailData.role }}
+              </t-tag>
+            </span>
           </div>
           <div class="detail-item">
             <span class="detail-label">状态</span>
             <span class="detail-value">
-              <t-tag :theme="detailStudent.status === 'active' ? 'success' : 'default'" variant="light" size="small">
-                {{ detailStudent.status === 'active' ? '正常' : '已禁用' }}
+              <t-tag :theme="detailData.status === 'active' ? 'success' : 'default'" variant="light" size="small">
+                {{ detailData.status === 'active' ? '正常' : '已禁用' }}
               </t-tag>
             </span>
           </div>
-        </div>
-        <t-divider />
-        <div class="detail-extra" v-if="detailStudentExtra">
-          <div class="detail-item">
-            <span class="detail-label">已完成作业</span>
-            <span class="detail-value">{{ detailStudentExtra.completedAssignments }} / {{ detailStudentExtra.totalAssignments }}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">参与课题</span>
-            <span class="detail-value">{{ detailStudentExtra.topicCount }} 个</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">产出成果</span>
-            <span class="detail-value">{{ detailStudentExtra.outcomeCount }} 项</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">登录次数</span>
-            <span class="detail-value">{{ detailStudentExtra.loginCount }} 次</span>
-          </div>
           <div class="detail-item detail-item-full">
-            <span class="detail-label">最近登录</span>
-            <span class="detail-value">{{ detailStudentExtra.lastLoginTime }}</span>
-          </div>
-          <div class="detail-item detail-item-full">
-            <span class="detail-label">备注</span>
-            <span class="detail-value">{{ detailStudentExtra.notes }}</span>
+            <span class="detail-label">个人简介</span>
+            <span class="detail-value">{{ detailData.profile?.bio || '-' }}</span>
           </div>
         </div>
       </div>
-      <t-loading v-else-if="detailLoading" text="加载中…" size="medium" />
+      <t-loading v-else text="加载中…" size="medium" />
     </t-drawer>
 
     <t-dialog
@@ -259,45 +209,30 @@
         label-width="100px"
         @submit="handleEditSubmit"
       >
-        <t-form-item label="姓名" name="name">
-          <t-input v-model="editFormData.name" placeholder="请输入姓名" />
+        <t-form-item label="姓名" name="real_name">
+          <t-input v-model="editFormData.real_name" placeholder="请输入姓名" />
         </t-form-item>
-        <t-form-item label="Scholar ID" name="scholarId">
-          <t-input v-model="editFormData.scholarId" placeholder="请输入Scholar ID" />
+        <t-form-item label="学号" name="student_id">
+          <t-input v-model="editFormData.student_id" placeholder="请输入学号" />
         </t-form-item>
-        <t-form-item label="角色" name="roleType">
-          <t-select v-model="editFormData.roleType" placeholder="请选择角色" :options="roleOptions" />
-        </t-form-item>
-        <t-form-item label="院校" name="university">
-          <t-input v-model="editFormData.university" placeholder="请输入院校" />
-        </t-form-item>
-        <t-form-item label="专业" name="major">
-          <t-input v-model="editFormData.major" placeholder="请输入专业" />
-        </t-form-item>
-        <t-form-item label="研究方向" name="researchDirection">
-          <t-input v-model="editFormData.researchDirection" placeholder="请输入研究方向" />
-        </t-form-item>
-        <t-form-item label="年级" name="grade">
-          <t-input v-model="editFormData.grade" placeholder="请输入年级" />
-        </t-form-item>
-        <t-form-item label="手机号" name="phone">
-          <t-input v-model="editFormData.phone" placeholder="请输入手机号" />
+        <t-form-item label="院校" name="institution_name">
+          <t-input v-model="editFormData.institution_name" placeholder="请输入院校" />
         </t-form-item>
         <t-form-item label="邮箱" name="email">
           <t-input v-model="editFormData.email" placeholder="请输入邮箱" />
         </t-form-item>
-        <t-form-item label="权限可见性" name="visibility">
-          <t-radio-group v-model="editFormData.visibility">
-            <t-radio value="visible">可见</t-radio>
-            <t-radio value="hidden">隐藏</t-radio>
-          </t-radio-group>
+        <t-form-item label="手机号" name="phone">
+          <t-input v-model="editFormData.phone" placeholder="请输入手机号" />
+        </t-form-item>
+        <t-form-item label="研究方向" name="research_direction">
+          <t-input v-model="editFormData.research_direction" placeholder="请输入研究方向" />
         </t-form-item>
         <t-form-item>
           <t-space>
             <t-button theme="primary" type="submit" :loading="editSubmitting">
               {{ editMode === 'create' ? '创建' : '保存' }}
             </t-button>
-            <t-button theme="default" variant="outline" @click="handleEditCancel">
+            <t-button theme="default" variant="outline" @click="editVisible = false">
               取消
             </t-button>
           </t-space>
@@ -330,50 +265,6 @@
         </t-button>
       </t-space>
     </t-dialog>
-
-    <t-dialog
-      v-model:visible="authorizeVisible"
-      header="评审员授权"
-      width="480px"
-      :confirm-btn="null"
-      :cancel-btn="null"
-    >
-      <t-form
-        ref="authFormRef"
-        :data="authFormData"
-        :rules="authFormRules"
-        label-align="right"
-        label-width="100px"
-        @submit="handleAuthorizeSubmit"
-      >
-        <t-form-item label="学员">
-          <t-input :value="authorizeStudent?.name" disabled />
-        </t-form-item>
-        <t-form-item label="授权状态" name="authorized">
-          <t-switch v-model="authFormData.authorized" />
-          <span style="margin-left: 8px; color: #86909C;">
-            {{ authFormData.authorized ? '已授权' : '未授权' }}
-          </span>
-        </t-form-item>
-        <t-form-item label="授权范围" name="scope">
-          <t-checkbox-group v-model="authFormData.scope">
-            <t-checkbox value="course">课程评审</t-checkbox>
-            <t-checkbox value="assignment">作业评审</t-checkbox>
-            <t-checkbox value="outcome">成果评审</t-checkbox>
-          </t-checkbox-group>
-        </t-form-item>
-        <t-form-item>
-          <t-space>
-            <t-button theme="primary" type="submit" :loading="authSubmitting">
-              确认授权
-            </t-button>
-            <t-button theme="default" variant="outline" @click="authorizeVisible = false">
-              取消
-            </t-button>
-          </t-space>
-        </t-form-item>
-      </t-form>
-    </t-dialog>
   </div>
 </template>
 
@@ -381,20 +272,19 @@
 import { ref, reactive } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next'
-import { mockStudents, mockStudent } from '@/mock/students'
-import type { Student, StudentDetail } from '@/mock/types'
+import { getStudents, getStudent, createStudent, updateStudent, disableStudent, resetPassword } from '@/api/students'
+
+const AVATAR_BASE = 'http://localhost:3001'
 
 const loading = ref(true)
-const tableData = ref<Student[]>([])
+const tableData = ref<any[]>([])
 const total = ref(0)
 
 const filters = reactive({
   nameKeyword: '',
   scholarId: '',
   university: '',
-  researchDirection: '',
-  roleType: '',
-  visibility: '',
+  status: '',
 })
 
 const pagination = reactive({
@@ -406,167 +296,118 @@ const universityOptions = [
   { label: '唐山工业职业技术大学', value: '唐山工业职业技术大学' },
   { label: '河北工业大学', value: '河北工业大学' },
   { label: '沧州师范学院', value: '沧州师范学院' },
-  { label: '河北经贸大学', value: '河北经贸大学' },
+  { label: '河北工艺美术职业学院', value: '河北工艺美术职业学院' },
   { label: '华北理工大学', value: '华北理工大学' },
-  { label: '鲁迅美术学院', value: '鲁迅美术学院' },
-  { label: '燕山大学', value: '燕山大学' },
+  { label: '华北理工大学艺术学院', value: '华北理工大学艺术学院' },
+  { label: '河北科技大学艺术学院', value: '河北科技大学艺术学院' },
+  { label: '河北经贸大学', value: '河北经贸大学' },
+  { label: '河北农业大学艺术学院', value: '河北农业大学艺术学院' },
+  { label: '河北建材职业技术学院', value: '河北建材职业技术学院' },
+  { label: '河北美术学院', value: '河北美术学院' },
   { label: '河北大学', value: '河北大学' },
-  { label: '河北师范大学', value: '河北师范大学' },
-  { label: '石家庄铁道大学', value: '石家庄铁道大学' },
-  { label: '河北科技大学', value: '河北科技大学' },
-  { label: '唐山学院', value: '唐山学院' },
-  { label: '唐山师范学院', value: '唐山师范学院' },
-  { label: '河北工程大学', value: '河北工程大学' },
+  { label: '河北东方学院文物艺术学院', value: '河北东方学院文物艺术学院' },
+  { label: '北华航天工业学院', value: '北华航天工业学院' },
+  { label: '唐山师范学院美术学院', value: '唐山师范学院美术学院' },
+  { label: '榆林大学艺术学院', value: '榆林大学艺术学院' },
+  { label: '鲁迅美术学院', value: '鲁迅美术学院' },
+  { label: '四川旅游学院', value: '四川旅游学院' },
+  { label: '河南工学院', value: '河南工学院' },
+  { label: '泉州海洋职业学院', value: '泉州海洋职业学院' },
+  { label: '内蒙古艺术学院', value: '内蒙古艺术学院' },
+  { label: '兰州文理学院', value: '兰州文理学院' },
+  { label: '自由创作人', value: '自由创作人' },
+  { label: '自由插画师', value: '自由插画师' },
 ]
 
-const researchDirectionOptions = [
-  { label: 'UE5可视化开发', value: 'UE5可视化开发' },
-  { label: '数字人文研究', value: '数字人文研究' },
-  { label: '交互设计', value: '交互设计' },
-  { label: '数字文化遗产保护', value: '数字文化遗产保护' },
-  { label: 'AI辅助设计', value: 'AI辅助设计' },
-  { label: '可视化设计', value: '可视化设计' },
-  { label: 'Blender建模', value: 'Blender建模' },
-  { label: '虚拟现实应用', value: '虚拟现实应用' },
-  { label: 'Houdini特效制作', value: 'Houdini特效制作' },
-  { label: '游戏引擎开发', value: '游戏引擎开发' },
-  { label: '影视特效', value: '影视特效' },
+const statusOptions = [
+  { label: '正常', value: 'active' },
+  { label: '已禁用', value: 'inactive' },
 ]
 
-const roleOptions = [
-  { label: '学员', value: '学员' },
-  { label: '教师', value: '教师' },
-  { label: '评审员', value: '评审员' },
-  { label: '管理员', value: '管理员' },
-]
-
-const visibilityOptions = [
-  { label: '可见', value: 'visible' },
-  { label: '隐藏', value: 'hidden' },
-]
+const roleLabelMap: Record<string, string> = {
+  admin: '管理员',
+  student: '学员',
+  reviewer: '评审员',
+}
 
 const columns = [
-  { colKey: 'scholarId', title: 'Scholar ID', width: 130, ellipsis: true },
-  { colKey: 'name', title: '姓名', width: 100 },
+  { colKey: 'avatar', title: '头像', width: 60, cell: 'avatar' },
+  { colKey: 'realName', title: '姓名', width: 100, cell: 'realName' },
+  { colKey: 'scholar_id', title: 'Scholar ID', width: 130, ellipsis: true },
   { colKey: 'university', title: '院校', width: 180, ellipsis: true },
-  { colKey: 'researchDirection', title: '研究方向', width: 140, ellipsis: true },
-  { colKey: 'roleType', title: '角色', width: 90, cell: 'roleType' },
-  { colKey: 'courseProgress', title: '课程进度', width: 160, cell: 'courseProgress' },
-  { colKey: 'visibility', title: '权限可见性', width: 100, cell: 'visibility' },
-  { colKey: 'reviewerAuthorized', title: '评审员授权', width: 100, cell: 'reviewerAuthorized' },
-  { colKey: 'operation', title: '操作', width: 240, cell: 'operation', fixed: 'right' },
+  { colKey: 'roleType', title: '角色', width: 80, cell: 'roleType' },
+  { colKey: 'status', title: '状态', width: 80, cell: 'status' },
+  { colKey: 'operation', title: '操作', width: 200, cell: 'operation', fixed: 'right' },
 ]
 
-const detailVisible = ref(false)
-const detailLoading = ref(false)
-const detailStudent = ref<Student | null>(null)
-const detailStudentExtra = ref<StudentDetail | null>(null)
-
-const editVisible = ref(false)
-const editMode = ref<'create' | 'edit'>('create')
-const editSubmitting = ref(false)
-const editFormRef = ref<FormInstanceFunctions>()
-const editingId = ref<string>('')
-
-const editFormData = reactive({
-  name: '',
-  scholarId: '',
-  roleType: '学员',
-  university: '',
-  major: '',
-  researchDirection: '',
-  grade: '',
-  phone: '',
-  email: '',
-  visibility: 'visible' as 'visible' | 'hidden',
-})
-
-const editFormRules: Record<string, FormRule[]> = {
-  name: [{ required: true, message: '请输入姓名', type: 'error' }],
-  scholarId: [{ required: true, message: '请输入Scholar ID', type: 'error' }],
-  roleType: [{ required: true, message: '请选择角色', type: 'error' }],
-  university: [{ required: true, message: '请输入院校', type: 'error' }],
-  email: [{ email: true, message: '请输入正确的邮箱格式', type: 'error' }],
-}
-
-const batchImportVisible = ref(false)
-const importLoading = ref(false)
-const uploadFiles = ref<any[]>([])
-
-const authorizeVisible = ref(false)
-const authSubmitting = ref(false)
-const authorizeStudent = ref<Student | null>(null)
-const authFormRef = ref<FormInstanceFunctions>()
-
-const authFormData = reactive({
-  authorized: false,
-  scope: [] as string[],
-})
-
-const authFormRules: Record<string, FormRule[]> = {
-  scope: [{ required: true, message: '请选择授权范围', type: 'error' }],
-}
-
 const roleThemeMap: Record<string, string> = {
-  '学员': 'primary',
-  '教师': 'success',
-  '评审员': 'warning',
-  '管理员': 'danger',
+  admin: 'danger',
+  student: 'primary',
+  reviewer: 'warning',
 }
 
-function getRoleTheme(roleType: string): string {
-  return roleThemeMap[roleType] || 'default'
+function getRoleTheme(role: string): string {
+  return roleThemeMap[role] || 'default'
 }
 
-function getReviewerTheme(row: Student): string {
-  return row.roleType === '评审员' ? 'success' : 'default'
+function getDisplayName(row: any): string {
+  return row?.profile?.real_name || row?.username || ''
 }
 
-function getReviewerLabel(row: Student): string {
-  return row.roleType === '评审员' ? '已授权' : '未授权'
+function getAvatarUrl(row: any): string {
+  const avatarPath = row?.profile?.avatar
+  if (!avatarPath) return ''
+  return `${AVATAR_BASE}${avatarPath}`
 }
 
-function fetchData() {
+function getInstitutionName(row: any): string {
+  return row?.profile?.institution?.name || ''
+}
+
+async function fetchData() {
   loading.value = true
-  setTimeout(() => {
-    const keyword = filters.nameKeyword || filters.scholarId || undefined
-    const result = mockStudents(pagination.current, pagination.pageSize, {
-      keyword,
-      university: filters.university || undefined,
-      researchDirection: filters.researchDirection || undefined,
-    })
-
-    let filtered = result.items || []
-    if (filters.roleType) {
-      filtered = filtered.filter((s) => s.roleType === filters.roleType)
+  try {
+    const params: Record<string, any> = {
+      role: 'student',
+      page: pagination.current,
+      limit: pagination.pageSize,
     }
-    if (filters.visibility) {
-      filtered = filtered.filter((s) => s.visibility === filters.visibility)
-    }
+    if (filters.status) params.status = filters.status
+    const res: any = await getStudents(params)
 
-    if (filters.roleType || filters.visibility) {
-      const allResult = mockStudents(1, 200, {
-        keyword,
-        university: filters.university || undefined,
-        researchDirection: filters.researchDirection || undefined,
-      })
-      let allFiltered = allResult.items || []
-      if (filters.roleType) {
-        allFiltered = allFiltered.filter((s) => s.roleType === filters.roleType)
-      }
-      if (filters.visibility) {
-        allFiltered = allFiltered.filter((s) => s.visibility === filters.visibility)
-      }
-      total.value = allFiltered.length
-      const start = (pagination.current - 1) * pagination.pageSize
-      tableData.value = allFiltered.slice(start, start + pagination.pageSize)
-    } else {
-      total.value = result.total
-      tableData.value = filtered
+    let items = res.data || []
+    if (filters.nameKeyword) {
+      const kw = filters.nameKeyword.toLowerCase()
+      items = items.filter((s: any) =>
+        (s.profile?.real_name || '').includes(kw) ||
+        (s.username || '').includes(kw)
+      )
+    }
+    if (filters.scholarId) {
+      const kw = filters.scholarId.toLowerCase()
+      items = items.filter((s: any) =>
+        (s.scholar_id || '').toLowerCase().includes(kw) ||
+        (s.profile?.student_id || '').includes(kw)
+      )
+    }
+    if (filters.university) {
+      items = items.filter((s: any) =>
+        getInstitutionName(s) === filters.university
+      )
     }
 
+    const enriched = items.map((item: any) => ({
+      ...item,
+      university: getInstitutionName(item),
+    }))
+
+    total.value = res.pagination?.total || 0
+    tableData.value = enriched
+  } catch (error) {
+    console.error('Failed to fetch students:', error)
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 function handleSearch() {
@@ -578,66 +419,69 @@ function handleReset() {
   filters.nameKeyword = ''
   filters.scholarId = ''
   filters.university = ''
-  filters.researchDirection = ''
-  filters.roleType = ''
-  filters.visibility = ''
+  filters.status = ''
   pagination.current = 1
   fetchData()
 }
 
-function handlePageChange() {
-  fetchData()
-}
+function handlePageChange() { fetchData() }
+function handlePageSizeChange() { pagination.current = 1; fetchData() }
 
-function handlePageSizeChange() {
-  pagination.current = 1
-  fetchData()
-}
+const detailVisible = ref(false)
+const detailData = ref<any>(null)
 
-async function handleView(row: Student) {
+async function handleView(row: any) {
   detailVisible.value = true
-  detailLoading.value = true
-  detailStudent.value = row
-  detailStudentExtra.value = null
+  detailData.value = null
+  try {
+    const res: any = await getStudent(row.id)
+    detailData.value = res
+  } catch (error) {
+    detailData.value = row
+  }
+}
 
-  setTimeout(() => {
-    const detail = mockStudent(row.id)
-    if (detail) {
-      detailStudentExtra.value = detail
-    }
-    detailLoading.value = false
-  }, 300)
+const editVisible = ref(false)
+const editMode = ref<'create' | 'edit'>('create')
+const editSubmitting = ref(false)
+const editFormRef = ref<FormInstanceFunctions>()
+const editingId = ref<number>(0)
+
+const editFormData = reactive({
+  real_name: '',
+  student_id: '',
+  institution_name: '',
+  email: '',
+  phone: '',
+  research_direction: '',
+})
+
+const editFormRules: Record<string, FormRule[]> = {
+  real_name: [{ required: true, message: '请输入姓名', type: 'error' }],
+  student_id: [{ required: true, message: '请输入学号', type: 'error' }],
 }
 
 function handleCreate() {
   editMode.value = 'create'
-  editingId.value = ''
-  editFormData.name = ''
-  editFormData.scholarId = ''
-  editFormData.roleType = '学员'
-  editFormData.university = ''
-  editFormData.major = ''
-  editFormData.researchDirection = ''
-  editFormData.grade = ''
-  editFormData.phone = ''
+  editingId.value = 0
+  editFormData.real_name = ''
+  editFormData.student_id = ''
+  editFormData.institution_name = ''
   editFormData.email = ''
-  editFormData.visibility = 'visible'
+  editFormData.phone = ''
+  editFormData.research_direction = ''
   editVisible.value = true
 }
 
-function handleEdit(row: Student) {
+function handleEdit(row: any) {
   editMode.value = 'edit'
   editingId.value = row.id
-  editFormData.name = row.name
-  editFormData.scholarId = row.scholarId
-  editFormData.roleType = row.roleType
-  editFormData.university = row.university
-  editFormData.major = row.major
-  editFormData.researchDirection = row.researchDirection
-  editFormData.grade = row.grade
-  editFormData.phone = row.phone
-  editFormData.email = row.email
-  editFormData.visibility = row.visibility
+  editFormData.real_name = row.profile?.real_name || ''
+  editFormData.student_id = row.profile?.student_id || ''
+  editFormData.institution_name = row.profile?.institution?.name || ''
+  editFormData.email = row.email || ''
+  editFormData.phone = row.profile?.phone || ''
+  editFormData.research_direction = row.profile?.research_direction || ''
   editVisible.value = true
 }
 
@@ -646,45 +490,61 @@ async function handleEditSubmit() {
   if (valid !== true) return
 
   editSubmitting.value = true
-  setTimeout(() => {
+  try {
     if (editMode.value === 'create') {
+      await createStudent({
+        username: `student${editFormData.student_id}`,
+        email: editFormData.email || `student${editFormData.student_id}@wukong.com`,
+        password: 'student@123',
+        role: 'student',
+        profile: {
+          real_name: editFormData.real_name,
+          student_id: editFormData.student_id,
+        }
+      })
       MessagePlugin.success('学员创建成功')
     } else {
+      await updateStudent(editingId.value, {
+        email: editFormData.email,
+        real_name: editFormData.real_name,
+        student_id: editFormData.student_id,
+        institution_name: editFormData.institution_name,
+        phone: editFormData.phone,
+        research_direction: editFormData.research_direction,
+      })
       MessagePlugin.success('学员信息已更新')
     }
-    editSubmitting.value = false
     editVisible.value = false
     fetchData()
-  }, 500)
+  } catch (error) {
+    MessagePlugin.error('操作失败')
+  } finally {
+    editSubmitting.value = false
+  }
 }
 
-function handleEditCancel() {
-  editVisible.value = false
+async function handleResetPassword(row: any) {
+  try {
+    const res: any = await resetPassword(row.id)
+    MessagePlugin.success(`学员 ${getDisplayName(row)} 密码已重置为: ${res.password || 'student@123'}`)
+  } catch (error) {
+    MessagePlugin.error('密码重置失败')
+  }
 }
 
-function handleDisable(row: Student) {
-  MessagePlugin.success(`学员 ${row.name} 已禁用`)
-  fetchData()
+async function handleDisable(row: any) {
+  try {
+    await disableStudent(row.id)
+    MessagePlugin.success(`学员 ${getDisplayName(row)} 已禁用`)
+    fetchData()
+  } catch (error) {
+    MessagePlugin.error('禁用失败')
+  }
 }
 
-function handleAuthorize(row: Student) {
-  authorizeStudent.value = row
-  authFormData.authorized = row.roleType === '评审员'
-  authFormData.scope = row.roleType === '评审员' ? ['course', 'assignment', 'outcome'] : []
-  authorizeVisible.value = true
-}
-
-async function handleAuthorizeSubmit() {
-  const valid = await authFormRef.value?.validate()
-  if (valid !== true) return
-
-  authSubmitting.value = true
-  setTimeout(() => {
-    MessagePlugin.success('授权设置已保存')
-    authSubmitting.value = false
-    authorizeVisible.value = false
-  }, 400)
-}
+const batchImportVisible = ref(false)
+const importLoading = ref(false)
+const uploadFiles = ref<any[]>([])
 
 function handleBatchImportConfirm() {
   if (uploadFiles.value.length === 0) {
@@ -746,6 +606,11 @@ fetchData()
   padding-top: 16px;
 }
 
+.student-name {
+  font-weight: 500;
+  color: #1F2329;
+}
+
 .detail-content {
   padding: 0 4px;
 }
@@ -794,11 +659,5 @@ fetchData()
 .detail-value {
   font-size: 14px;
   color: #1F2329;
-}
-
-.detail-extra {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 24px;
 }
 </style>

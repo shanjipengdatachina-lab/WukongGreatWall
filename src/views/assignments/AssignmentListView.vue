@@ -12,34 +12,15 @@
         <t-form-item label="所属课程">
           <t-select v-model="filters.courseId" placeholder="全部课程" clearable style="width: 200px">
             <t-option value="" label="全部课程" />
-            <t-option v-for="c in courseOptions" :key="c.id" :value="c.id" :label="c.title" />
+            <t-option v-for="c in courseOptions" :key="c.id" :value="c.id" :label="c.name" />
           </t-select>
         </t-form-item>
-        <t-form-item label="作业类型">
-          <t-select v-model="filters.type" placeholder="全部类型" clearable style="width: 140px">
-            <t-option value="" label="全部" />
-            <t-option value="个人作业" label="课程作业" />
-            <t-option value="小组作业" label="小组作业" />
-            <t-option value="课题作业" label="课题任务" />
-          </t-select>
-        </t-form-item>
-        <t-form-item label="截止时间">
-          <t-date-range-picker
-            v-model="filters.dateRange"
-            placeholder="请选择截止时间范围"
-            allow-input
-            clearable
-            style="width: 240px"
-          />
-        </t-form-item>
-        <t-form-item label="提交状态">
+        <t-form-item label="状态">
           <t-select v-model="filters.status" placeholder="全部状态" clearable style="width: 140px">
             <t-option value="" label="全部" />
-            <t-option value="pending" label="未提交" />
-            <t-option value="submitted" label="已提交" />
-            <t-option value="reviewing" label="评审中" />
-            <t-option value="reviewed" label="已完成" />
-            <t-option value="overdue" label="已逾期" />
+            <t-option value="draft" label="草稿" />
+            <t-option value="published" label="已发布" />
+            <t-option value="closed" label="已关闭" />
           </t-select>
         </t-form-item>
         <t-form-item>
@@ -64,7 +45,7 @@
 
       <t-loading :loading="loading">
         <t-table
-          v-if="!isEmpty"
+          v-if="assignmentList.length > 0"
           :data="assignmentList"
           :columns="columns"
           row-key="id"
@@ -73,27 +54,13 @@
           :pagination="pagination"
           @page-change="onPageChange"
         >
-          <template #type="{ row }">
-            <t-tag :theme="typeTheme(row.type)" variant="light">
-              {{ row.type }}
-            </t-tag>
+          <template #course="{ row }">
+            <t-tag variant="outline" size="small">{{ row.Course?.name || '-' }}</t-tag>
           </template>
-          <template #submitRate="{ row }">
-            <t-progress
-              :percentage="row.submitRate"
-              :label="`${row.submittedCount}/${row.totalStudents}`"
-              size="small"
-              style="width: 120px"
-            />
-          </template>
-          <template #reviewRate="{ row }">
-            <t-progress
-              :percentage="row.reviewRate"
-              :label="`${row.reviewedCount}/${row.submittedCount}`"
-              size="small"
-              theme="plump"
-              style="width: 120px"
-            />
+          <template #deadline="{ row }">
+            <span :style="{ color: isOverdue(row.deadline) ? '#e34d59' : '' }">
+              {{ row.deadline ? formatDate(row.deadline) : '-' }}
+            </span>
           </template>
           <template #status="{ row }">
             <t-tag :theme="statusTheme(row.status)" variant="light">
@@ -108,11 +75,18 @@
                 <t-link theme="danger" hover="color">删除</t-link>
               </t-popconfirm>
               <t-popconfirm
-                v-if="row.status === 'pending'"
+                v-if="row.status === 'draft'"
                 content="确认发布该作业？"
                 @confirm="handlePublish(row)"
               >
                 <t-link theme="success" hover="color">发布</t-link>
+              </t-popconfirm>
+              <t-popconfirm
+                v-if="row.status === 'published'"
+                content="确认关闭该作业？"
+                @confirm="handleClose(row)"
+              >
+                <t-link theme="warning" hover="color">关闭</t-link>
               </t-popconfirm>
             </t-space>
           </template>
@@ -123,8 +97,8 @@
 
     <t-dialog
       v-model:visible="dialogVisible"
-      :header="formData.editingId ? '编辑作业' : '新建作业'"
-      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :header="formData.id ? '编辑作业' : '新建作业'"
+      :confirm-btn="{ content: '保存', theme: 'primary', loading: submitting }"
       width="600px"
       @confirm="handleSave"
       @close="resetForm"
@@ -133,17 +107,13 @@
         <t-form-item label="作业标题" name="title">
           <t-input v-model="formData.title" placeholder="请输入作业标题" />
         </t-form-item>
-        <t-form-item label="所属课程" name="courseId">
-          <t-select v-model="formData.courseId" placeholder="请选择所属课程">
-            <t-option v-for="c in courseOptions" :key="c.id" :value="c.id" :label="c.title" />
+        <t-form-item label="所属课程" name="course_id">
+          <t-select v-model="formData.course_id" placeholder="请选择所属课程">
+            <t-option v-for="c in courseOptions" :key="c.id" :value="c.id" :label="c.name" />
           </t-select>
         </t-form-item>
-        <t-form-item label="作业类型" name="type">
-          <t-radio-group v-model="formData.type">
-            <t-radio value="个人作业">课程作业</t-radio>
-            <t-radio value="小组作业">小组作业</t-radio>
-            <t-radio value="课题作业">课题任务</t-radio>
-          </t-radio-group>
+        <t-form-item label="作业描述" name="description">
+          <t-textarea v-model="formData.description" placeholder="请输入作业要求说明" :maxlength="500" />
         </t-form-item>
         <t-form-item label="截止时间" name="deadline">
           <t-date-picker
@@ -155,18 +125,8 @@
             style="width: 100%"
           />
         </t-form-item>
-        <t-form-item label="提交要求" name="format">
-          <t-radio-group v-model="formData.format">
-            <t-radio value="image">图片</t-radio>
-            <t-radio value="pdf">PDF</t-radio>
-            <t-radio value="image+pdf">图片+PDF</t-radio>
-          </t-radio-group>
-        </t-form-item>
-        <t-form-item label="发布对象" name="publishTarget">
-          <t-select v-model="formData.publishTarget" placeholder="请选择发布对象">
-            <t-option value="all" label="全部学员" />
-            <t-option value="group" label="指定分组" />
-          </t-select>
+        <t-form-item label="满分" name="max_score">
+          <t-input v-model.number="formData.max_score" placeholder="默认100" />
         </t-form-item>
       </t-form>
     </t-dialog>
@@ -186,25 +146,17 @@
       <t-list v-else :split="true">
         <t-list-item v-for="sub in submissions" :key="sub.id">
           <t-list-item-meta
-            :title="sub.studentName"
-            :description="`${sub.scholarId} · ${sub.university}`"
+            :title="sub.User?.profile?.real_name || sub.User?.username || '-'"
+            :description="`${sub.User?.scholar_id || ''} · ${sub.User?.profile?.institution?.name || ''}`"
           />
           <template #action>
             <t-space direction="vertical" size="4px" align="end">
               <t-tag :theme="subStatusTheme(sub.status)" variant="light" size="small">
                 {{ subStatusLabel(sub.status) }}
               </t-tag>
-              <span class="sub-meta-text">{{ sub.submitTime }}</span>
-              <t-link
-                v-if="sub.score !== null"
-                theme="primary"
-                hover="color"
-                @click="goToReview(sub.id)"
-              >
+              <span class="sub-meta-text">{{ sub.created_at ? formatDate(sub.created_at) : '-' }}</span>
+              <t-link theme="primary" hover="color" @click="goToReview(sub.id)">
                 查看评审
-              </t-link>
-              <t-link v-else theme="primary" hover="color" @click="goToReview(sub.id)">
-                开始评审
               </t-link>
             </t-space>
           </template>
@@ -227,30 +179,22 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
-import { mockAssignments, mockSubmissions, mockCourses } from '@/mock'
-import type { Assignment, Submission, Course } from '@/mock/types'
+import { getAssignments, createAssignment, updateAssignment, deleteAssignment } from '@/api/assignments'
+import { getCourses } from '@/api/courses'
+import request from '@/api/index'
 
 const router = useRouter()
 
-interface AssignmentFilters {
-  keyword: string
-  courseId: string
-  type: string
-  dateRange: string[]
-  status: string
-}
-
 const loading = ref(false)
-const allAssignments = ref<Assignment[]>([])
-const courseOptions = ref<{ id: string; title: string }[]>([])
+const submitting = ref(false)
+const allAssignments = ref<any[]>([])
+const courseOptions = ref<any[]>([])
 const page = ref(1)
 const pageSize = ref(10)
 
-const filters = ref<AssignmentFilters>({
+const filters = ref({
   keyword: '',
   courseId: '',
-  type: '',
-  dateRange: [],
   status: '',
 })
 
@@ -258,20 +202,13 @@ const filteredList = computed(() => {
   let list = allAssignments.value
   if (filters.value.keyword) {
     const kw = filters.value.keyword.toLowerCase()
-    list = list.filter(a => a.title.toLowerCase().includes(kw))
+    list = list.filter((a: any) => a.title.toLowerCase().includes(kw))
   }
   if (filters.value.courseId) {
-    list = list.filter(a => a.courseId === filters.value.courseId)
-  }
-  if (filters.value.type) {
-    list = list.filter(a => a.type === filters.value.type)
-  }
-  if (filters.value.dateRange && filters.value.dateRange.length === 2) {
-    const [start, end] = filters.value.dateRange
-    list = list.filter(a => a.deadline >= start && a.deadline <= end)
+    list = list.filter((a: any) => String(a.course_id) === String(filters.value.courseId))
   }
   if (filters.value.status) {
-    list = list.filter(a => a.status === filters.value.status)
+    list = list.filter((a: any) => a.status === filters.value.status)
   }
   return list
 })
@@ -290,31 +227,22 @@ const pagination = computed(() => ({
   showJumper: true,
 }))
 
-const isEmpty = computed(() => assignmentList.value.length === 0)
-
 const columns = [
   { colKey: 'title', title: '作业标题', width: 200, ellipsis: true },
-  { colKey: 'courseTitle', title: '所属课程', width: 180, ellipsis: true },
-  { colKey: 'type', title: '作业类型', width: 100, align: 'center' },
-  { colKey: 'deadline', title: '截止时间', width: 140, align: 'center' },
-  { colKey: 'submitRate', title: '提交率', width: 140 },
-  { colKey: 'reviewRate', title: '批注进度', width: 140 },
-  { colKey: 'status', title: '提交状态', width: 100, align: 'center' },
-  { colKey: 'operation', title: '操作', width: 260, fixed: 'right' },
+  { colKey: 'course', title: '所属课程', width: 200 },
+  { colKey: 'deadline', title: '截止时间', width: 150 },
+  { colKey: 'max_score', title: '满分', width: 70, align: 'center' as const },
+  { colKey: 'status', title: '状态', width: 80, align: 'center' as const },
+  { colKey: 'operation', title: '操作', width: 300, fixed: 'right' as const },
 ]
 
-function typeTheme(type: string): string {
-  const map: Record<string, string> = { '个人作业': 'primary', '小组作业': 'warning', '课题作业': 'warning' }
-  return map[type] || 'default'
-}
-
 function statusTheme(status: string): string {
-  const map: Record<string, string> = { pending: 'default', submitted: 'primary', reviewing: 'primary', reviewed: 'success', overdue: 'danger' }
+  const map: Record<string, string> = { draft: 'default', published: 'success', closed: 'warning' }
   return map[status] || 'default'
 }
 
 function statusLabel(status: string): string {
-  const map: Record<string, string> = { pending: '未开始', submitted: '已提交', reviewing: '进行中', reviewed: '已完成', overdue: '已逾期' }
+  const map: Record<string, string> = { draft: '草稿', published: '已发布', closed: '已关闭' }
   return map[status] || status
 }
 
@@ -328,12 +256,21 @@ function subStatusLabel(status: string): string {
   return map[status] || status
 }
 
-function onFilter() {
-  page.value = 1
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+function isOverdue(deadline: string): boolean {
+  if (!deadline) return false
+  return new Date(deadline) < new Date()
+}
+
+function onFilter() { page.value = 1 }
+
 function resetFilters() {
-  filters.value = { keyword: '', courseId: '', type: '', dateRange: [], status: '' }
+  filters.value = { keyword: '', courseId: '', status: '' }
   page.value = 1
 }
 
@@ -342,118 +279,130 @@ function onPageChange(pageInfo: { current: number; pageSize: number }) {
   pageSize.value = pageInfo.pageSize
 }
 
-const dialogVisible = ref(false)
-const formRef = ref()
-
-const formData = ref({
-  editingId: '',
-  title: '',
-  courseId: '',
-  type: '个人作业',
-  deadline: '',
-  format: 'image',
-  publishTarget: 'all',
-})
-
-const formRules = {
-  title: [{ required: true, message: '请输入作业标题', type: 'error' }],
-  courseId: [{ required: true, message: '请选择所属课程', type: 'error' }],
-  type: [{ required: true, message: '请选择作业类型', type: 'error' }],
-  deadline: [
-    { required: true, message: '请选择截止时间', type: 'error' },
-    {
-      validator: (val: string) => {
-        if (!val) return { result: true }
-        const now = new Date().toISOString().slice(0, 16)
-        return { result: val >= now, message: '截止时间必须为未来时间', type: 'error' }
-      },
-    },
-  ],
-  format: [{ required: true, message: '请选择提交要求', type: 'error' }],
-  publishTarget: [{ required: true, message: '请选择发布对象', type: 'error' }],
+async function fetchAssignments() {
+  loading.value = true
+  try {
+    const res: any = await getAssignments({ page: 1, limit: 100 })
+    allAssignments.value = res.data || res || []
+  } catch {
+    MessagePlugin.error('加载作业数据失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-function openCreateDialog(row?: Assignment) {
+async function fetchCourseOptions() {
+  try {
+    const res: any = await getCourses({ page: 1, limit: 100 })
+    courseOptions.value = (res.data || res || []).map((c: any) => ({ id: c.id, name: c.name, code: c.code }))
+  } catch { }
+}
+
+const dialogVisible = ref(false)
+const formRef = ref()
+const formData = ref<any>({ id: 0, title: '', course_id: '', description: '', deadline: '', max_score: 100 })
+const formRules = {
+  title: [{ required: true, message: '请输入作业标题', type: 'error' }],
+  course_id: [{ required: true, message: '请选择所属课程', type: 'error' }],
+}
+
+function openCreateDialog(row?: any) {
   if (row) {
     formData.value = {
-      editingId: row.id,
+      id: row.id,
       title: row.title,
-      courseId: row.courseId,
-      type: row.type,
-      deadline: row.deadline,
-      format: 'image',
-      publishTarget: 'all',
+      course_id: row.course_id,
+      description: row.description || '',
+      deadline: row.deadline || '',
+      max_score: row.max_score || 100,
     }
   } else {
-    formData.value = {
-      editingId: '',
-      title: '',
-      courseId: '',
-      type: '个人作业',
-      deadline: '',
-      format: 'image',
-      publishTarget: 'all',
-    }
+    formData.value = { id: 0, title: '', course_id: '', description: '', deadline: '', max_score: 100 }
   }
   dialogVisible.value = true
 }
 
 function resetForm() {
-  formData.value = {
-    editingId: '',
-    title: '',
-    courseId: '',
-    type: '个人作业',
-    deadline: '',
-    format: 'image',
-    publishTarget: 'all',
+  formData.value = { id: 0, title: '', course_id: '', description: '', deadline: '', max_score: 100 }
+}
+
+async function handleSave() {
+  const valid = await formRef.value?.validate()
+  if (valid !== true) return
+  submitting.value = true
+  try {
+    if (formData.value.id) {
+      await updateAssignment(formData.value.id, formData.value)
+      MessagePlugin.success('作业更新成功')
+    } else {
+      await createAssignment(formData.value)
+      MessagePlugin.success('作业创建成功')
+    }
+    dialogVisible.value = false
+    resetForm()
+    await fetchAssignments()
+  } catch {
+    MessagePlugin.error('操作失败')
+  } finally {
+    submitting.value = false
   }
 }
 
-function handleSave() {
-  formRef.value?.validate().then((result: any) => {
-    if (result === true || (typeof result === 'object' && Object.keys(result).length === 0)) {
-      if (formData.value.editingId) {
-        MessagePlugin.success('作业更新成功')
-      } else {
-        MessagePlugin.success('作业创建成功')
-      }
-      dialogVisible.value = false
-      resetForm()
-    }
-  })
+async function handleDelete(row: any) {
+  try {
+    await deleteAssignment(row.id)
+    MessagePlugin.success('作业已删除')
+    await fetchAssignments()
+  } catch {
+    MessagePlugin.error('删除失败')
+  }
 }
 
-function handleDelete(row: Assignment) {
-  MessagePlugin.success(`作业"${row.title}"已删除`)
+async function handlePublish(row: any) {
+  try {
+    await updateAssignment(row.id, { status: 'published' })
+    MessagePlugin.success('作业已发布')
+    await fetchAssignments()
+  } catch {
+    MessagePlugin.error('操作失败')
+  }
 }
 
-function handlePublish(row: Assignment) {
-  MessagePlugin.success(`作业"${row.title}"已发布`)
+async function handleClose(row: any) {
+  try {
+    await updateAssignment(row.id, { status: 'closed' })
+    MessagePlugin.success('作业已关闭')
+    await fetchAssignments()
+  } catch {
+    MessagePlugin.error('操作失败')
+  }
 }
 
 const submissionDrawerVisible = ref(false)
 const submissionLoading = ref(false)
-const submissions = ref<Submission[]>([])
+const submissions = ref<any[]>([])
 const submissionTotal = ref(0)
 const submissionPage = ref(1)
 const submissionPageSize = ref(10)
-const currentAssignmentId = ref('')
+const currentAssignmentId = ref<number>(0)
 const submissionEmpty = computed(() => submissions.value.length === 0)
 
-function openSubmissionDrawer(row: Assignment) {
+function openSubmissionDrawer(row: any) {
   currentAssignmentId.value = row.id
   submissionPage.value = 1
   submissionDrawerVisible.value = true
   fetchSubmissions()
 }
 
-function fetchSubmissions() {
+async function fetchSubmissions() {
   submissionLoading.value = true
   try {
-    const result = mockSubmissions(currentAssignmentId.value, submissionPage.value, submissionPageSize.value)
-    submissions.value = result.items
-    submissionTotal.value = result.total
+    const res: any = await request.get('/submissions', {
+      params: { assignment_id: currentAssignmentId.value, page: submissionPage.value, limit: submissionPageSize.value }
+    })
+    const data = res.data || res || []
+    submissions.value = Array.isArray(data) ? data : data.list || data.data || []
+    submissionTotal.value = res.pagination?.total || submissions.value.length
   } catch {
     MessagePlugin.error('加载提交数据失败')
   } finally {
@@ -467,28 +416,14 @@ function onSubmissionPageChange(pageInfo: { current: number; pageSize: number })
   fetchSubmissions()
 }
 
-function goToReview(submissionId: string) {
+function goToReview(submissionId: number) {
   submissionDrawerVisible.value = false
   router.push(`/reviews/${submissionId}`)
 }
 
 onMounted(() => {
-  loading.value = true
-  try {
-    const result = mockAssignments(1, 100)
-    allAssignments.value = result.items
-  } catch {
-    MessagePlugin.error('加载作业数据失败')
-  } finally {
-    loading.value = false
-  }
-
-  try {
-    const coursesResult = mockCourses(1, 100)
-    courseOptions.value = coursesResult.items.map(c => ({ id: c.id, title: c.title }))
-  } catch {
-    MessagePlugin.error('加载课程选项失败')
-  }
+  fetchAssignments()
+  fetchCourseOptions()
 })
 </script>
 

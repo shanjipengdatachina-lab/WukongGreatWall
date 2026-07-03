@@ -64,11 +64,7 @@
               </t-button>
             </t-form-item>
           </t-form>
-          <div class="login-tips">
-            <t-alert theme="info" :close="false">
-              演示账号：admin / admin123 已自动填入
-            </t-alert>
-          </div>
+
         </t-card>
         <p class="login-footer">© 2026 悟空云界学员协作系统</p>
       </div>
@@ -90,8 +86,8 @@ const formRef = ref<FormInstanceFunctions>()
 const loading = ref(false)
 
 const formData = reactive({
-  account: 'admin',
-  password: 'admin123',
+  account: '',
+  password: '',
   remember: true,
 })
 
@@ -119,31 +115,7 @@ async function handleSubmit() {
     MessagePlugin.success('登录成功')
     router.push('/dashboard')
   } catch {
-    if (formData.account === 'admin' && formData.password === 'admin123') {
-      authStore.token = 'mock-token-demo'
-      authStore.user = {
-        id: 1,
-        name: '管理员',
-        role: 'admin',
-        scholarId: 'S2026-0000',
-      }
-      if (formData.remember) {
-        localStorage.setItem('token', 'mock-token-demo')
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            id: 1,
-            name: '管理员',
-            role: 'admin',
-            scholarId: 'S2026-0000',
-          })
-        )
-      }
-      MessagePlugin.success('登录成功（模拟模式）')
-      router.push('/dashboard')
-    } else {
-      MessagePlugin.error('账号或密码错误')
-    }
+    MessagePlugin.error('账号或密码错误')
   } finally {
     loading.value = false
   }
@@ -232,10 +204,6 @@ async function handleSubmit() {
   color: #86909C;
   margin: 0;
   letter-spacing: 1px;
-}
-
-.login-tips {
-  margin-top: 8px;
 }
 
 .login-footer {

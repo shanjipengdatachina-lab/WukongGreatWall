@@ -11,13 +11,22 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const userRole = computed(() => user.value?.role || '')
-  const userName = computed(() => user.value?.name || '')
+  const userName = computed(() => user.value?.username || user.value?.name || '')
 
   async function loginAction(params: LoginParams) {
-    const res = await loginApi(params)
-    const data = res.data as any
-    token.value = data.token || data.data?.token
-    user.value = data.user || data.data?.user
+    const data: any = await loginApi(params)
+    token.value = data.token
+    const u = data.user
+    user.value = {
+      id: u.id,
+      name: u.profile?.real_name || u.username || u.name,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      scholarId: u.scholar_id,
+      avatar: u.profile?.avatar,
+      institution: u.profile?.institution?.name,
+    }
     if (params.remember) {
       localStorage.setItem('token', token.value)
       localStorage.setItem('user', JSON.stringify(user.value))

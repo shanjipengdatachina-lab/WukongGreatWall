@@ -1,10 +1,9 @@
 import axios from 'axios'
 import { MessagePlugin } from 'tdesign-vue-next'
-import type { ApiResponse } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 
 const request = axios.create({
-  baseURL: '/api/admin',
+  baseURL: 'http://localhost:3001/api',
   timeout: 15000,
 })
 
@@ -21,12 +20,7 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
-    const res = response.data as ApiResponse
-    if (res.code !== 0 && res.code !== 200) {
-      MessagePlugin.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
-    }
-    return response
+    return response.data
   },
   (error) => {
     if (error.response?.status === 401) {
@@ -34,7 +28,7 @@ request.interceptors.response.use(
       authStore.logout()
       window.location.href = '/login'
     }
-    MessagePlugin.error(error.message || '网络错误')
+    MessagePlugin.error(error.response?.data?.error || error.message || '网络错误')
     return Promise.reject(error)
   }
 )
